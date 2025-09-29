@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Smart School Student Portal</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  body {
+    font-family: 'Roboto', sans-serif;
+    margin: 0;
+    padding: 0;
+    background: url('https://images.unsplash.com/photo-1596496056908-f76b14b2ebd1?auto=format&fit=crop&w=1600&q=80') no-repeat center center fixed;
+    background-size: cover;
+    color: #333;
+  }
+  .overlay {
+    background: rgba(255,255,255,0.95);
+    min-height: 100vh;
+    padding: 20px 40px;
+  }
+  h1 { text-align: center; color: #004085; }
+  h2 { color: #004085; margin-top: 40px; }
+  input, button {
+    padding: 10px;
+    margin: 5px 0;
+    font-size: 16px;
+  }
+  button {
+    cursor: pointer;
+    background: #004085;
+    color: white;
+    border: none;
+    border-radius: 5px;
+  }
+  button:hover {
+    background: #002752;
+  }
+  table {
+    margin-top: 20px;
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th, td {
+    border: 1px solid #ccc;
+    padding: 8px;
+    text-align: center;
+  }
+  th {
+    background: #004085;
+    color: white;
+  }
+  .section {
+    margin-top: 40px;
+  }
+  .feedback {
+    margin-top: 10px;
+    padding: 10px;
+    background: #d1ecf1;
+    border-left: 5px solid #0c5460;
+  }
+</style>
+</head>
+<body>
+<div class="overlay">
+<h1>SMART FOUNDATION STUDENT PORTAL</h1>
+
+<!-- Subjects input -->
+<div class="section">
+<h2>Set Subjects</h2>
+<input type="text" id="subjectInput" placeholder="Enter subjects separated by commas, e.g., Math,English,Physics">
+<button onclick="setSubjects()">Set Subjects</button>
+<div class="feedback" id="subjectFeedback" style="display:none;"></div>
+</div>
+
+<!-- Add Student -->
+<div class="section">
+<h2>1️⃣ Add Student</h2>
+<input type="text" id="studentName" placeholder="Enter student name">
+<input type="text" id="studentID" placeholder="Enter registration number">
+<button onclick="addStudent()">Add Student</button>
+<table id="studentList">
+<thead><tr><th>#</th><th>Name</th><th>Reg. No</th></tr></thead>
+<tbody></tbody>
+</table>
+</div>
+
+<!-- Enter Grades -->
+<div class="section">
+<h2>2️⃣ Enter Grades</h2>
+<div id="gradesContainer"></div>
+</div>
+
+<!-- Results Table -->
+<div class="section">
+<h2>3️⃣ Results</h2>
+<table id="resultsTable">
+<thead></thead>
+<tbody></tbody>
+</table>
+</div>
+
+<!-- Search Student -->
+<div class="section">
+<h2>4️⃣ Search Student by Reg No</h2>
+<input type="text" id="searchInput" placeholder="Enter registration number">
+<button onclick="searchStudent()">Search</button>
+<div id="searchResult" class="feedback" style="display:none;"></div>
+</div>
+
+<!-- Class Statistics & Chart -->
+<div class="section">
+<h2>5️⃣ Class Statistics</h2>
+<table id="statsTable">
+<thead><tr><th>Subject</th><th>Average</th></tr></thead>
+<tbody></tbody>
+</table>
+<canvas id="gradeChart" style="max-width:600px;margin-top:20px;"></canvas>
+</div>
+
+<script>
+let subjects = [];
+let students = [];
+
+// Set Subjects
+function setSubjects() {
+  let input = document.getElementById("subjectInput").value.trim();
+  if(!input){ alert("Enter at least one subject!"); return; }
+  subjects = input.split(",").map(s=>s.trim());
+  document.getElementById("subjectFeedback").style.display="block";
+  document.getElementById("subjectFeedback").innerHTML = `Subjects set: ${subjects.join(", ")}`;
+  renderGradesInput();
+  renderResults();
+  renderStats();
+}
+
+// Add student
+function addStudent(){
+  let name = document.getElementById("studentName").value.trim();
+  let id = document.getElementById("studentID").value.trim();
+  if(!name || !id){ alert("Enter both name and reg number!"); return; }
+  if(students.find(s=>s.id===id)){ alert("Registration number must be unique!"); return; }
+  students.push({name,id,grades:{}});
+  document.getElementById("studentName").value="";
+  document.getElementById("studentID").value="";
+  renderStudentList();
+  renderGradesInput();
+  renderResults();
+  renderStats();
+}
+
+// Render student list
+function renderStudentList(){
+  let tbody = document.getElementById("studentList").querySelector("tbody");
+  tbody.innerHTML="";
+  students.forEach((s,i)=>{
+    tbody.innerHTML += `<tr><td>${i+1}</td><td>${s.name}</td><td>${s.id}</td></tr>`;
+  });
+}
+
+// Render grades input
+function renderGradesInput(){
+  if(subjects.length===0) return;
+  let container = document.getElementById("gradesContainer");
+  container.innerHTML="";
+  students.forEach((s,i)=>{
+    container.innerHTML += `<div style="margin-bottom:15px; border:1px solid #ccc; padding:10px; border-radius:8px;">
+      <h3>${i+1}. ${s.name} (Reg No: ${s.id})</h3>
+      ${subjects.map(sub=>`${sub}: <input type="number" id="${sub}_${i}" min="0" max="100" placeholder="0-100">`).join('<br>')}
+      <br><button onclick="saveGrades(${i})">Save Grades</button>
+      <div class="feedback" id="feedback_${i}" style="display:none;"></div>
+    </div>`;
+  });
+}
+
+// Save grades
+function saveGrades(index){
+  let s = students[index];
+  let gradesObj = {};
+  for(let sub of subjects){
+    let val = parseFloat(document.getElementById(`${sub}_${index}`).value);
+    if(isNaN(val) || val<0 || val>100){ alert("Enter valid grades 0-100"); return; }
+    gradesObj[sub]=val;
+  }
+  s.grades = gradesObj;
+  let avg = Object.values(gradesObj).reduce((a,b)=>a+b,0)/subjects.length;
+  s.average = avg.toFixed(1);
+  s.grade = avg>=90?'A':avg>=80?'B':avg>=70?'C':avg>=60?'D':'F';
+  document.getElementById(`feedback_${index}`).style.display="block";
+  document.getElementById(`feedback_${index}`).innerHTML = `Grades saved! Average: ${s.average}, Grade: ${s.grade}`;
+  renderResults();
+  renderStats();
+}
+
+// Render results table
+function renderResults(){
+  if(subjects.length===0) return;
+  let table = document.getElementById("resultsTable");
+  table.querySelector("thead").innerHTML=`<tr><th>#</th><th>Name</th><th>Reg No</th>${subjects.map(s=>`<th>${s}</th>`).join('')}<th>Average</th><th>Grade</th></tr>`;
+  let tbody = table.querySelector("tbody");
+  tbody.innerHTML="";
+  students.forEach((s,i)=>{
+    if(!s.grades || Object.keys(s.grades).length===0) return;
+    tbody.innerHTML += `<tr>
+      <td>${i+1}</td>
+      <td>${s.name}</td>
+      <td>${s.id}</td>
+      ${subjects.map(sub=>`<td>${s.grades[sub]}</td>`).join('')}
+      <td>${s.average}</td>
+      <td>${s.grade}</td>
+    </tr>`;
+  });
+}
+
+// Search student by reg number
+function searchStudent(){
+  let query = document.getElementById("searchInput").value.trim();
+  let res = document.getElementById("searchResult");
+  let s = students.find(st=>st.id===query);
+  if(s && s.grades && Object.keys(s.grades).length>0){
+    let messages = {'A':"Yaza! Excellent performance!",'B':"Well done!",'C':"Keep it up!",'D':"Needs improvement.",'F':"Failed! Focus more next time."};
+    res.style.display="block";
+    res.innerHTML = `<p><b>Name:</b> ${s.name}</p>
+                     <p><b>Reg No:</b> ${s.id}</p>
+                     <p><b>Average:</b> ${s.average}</p>
+                     <p><b>Grade:</b> ${s.grade}</p>
+                     <p><b>Feedback:</b> ${messages[s.grade]}</p>`;
+  } else { res.style.display="block"; res.innerHTML="Student not found or grades not entered!"; }
+}
+
+// Class statistics & chart
+function renderStats(){
+  if(subjects.length===0) return;
+  let totals={}; subjects.forEach(s=>totals[s]=0);
+  let grades={'A':0,'B':0,'C':0,'D':0,'F':0};
+  let count=0;
+  students.forEach(s=>{
+    if(!s.grades || Object.keys(s.grades).length===0) return;
+    count++;
+    subjects.forEach(sub=>totals[sub]+=s.grades[sub]);
+    grades[s.grade]++;
+  });
+  if(count===0) return;
+  let tbody = document.getElementById("statsTable").querySelector("tbody");
+  tbody.innerHTML="";
+  subjects.forEach(sub=>{
+    tbody.innerHTML += `<tr><td>${sub}</td><td>${(totals[sub]/count).toFixed(1)}</td></tr>`;
+  });
+  
+  // Render chart
+  let ctx = document.getElementById('gradeChart').getContext('2d');
+  if(window.gradeChart) window.gradeChart.destroy();
+  window.gradeChart = new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels:Object.keys(grades),
+      datasets:[{label:'Number of Students',data:Object.values(grades),backgroundColor:'#004085'}]
+    },
+    options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,stepSize:1}}}
+  });
+}
+</script>
+</div>
+</body>
+</html>
